@@ -1,41 +1,25 @@
-use std::alloc::{Layout, alloc, dealloc};
+mod arena;
+use arena::Arena;
 
-// Link to AOT-generated machine code - now unsafe extern
 unsafe extern "C" {
     fn rt_get_tag(ptr: *const u8) -> i32;
     fn rt_get_payload(ptr: *const u8, offset: i32) -> i32;
 }
 
-/// Universal Enum with reference-counted GC
-struct UniversalEnum {
+/// Universal Enum - arena-allocated, no GC, no Drop
+pub struct UniversalEnum<'a> {
     ptr: *mut u8,
     name: &'static str,
-    layout: Layout,
+    _marker: std::marker::PhantomData<&'a ()>,
 }
 
-impl UniversalEnum {
-    /// Allocate: [RC: u64][Tag: u32][Payload...]
-    fn new(name: &'static str, tag: u8, data: &[i32]) -> Self {
-        let data_size = data.len() * 4;
-        let total_size = 8 + 4 + data_size;
-        let layout = Layout::from_size_align(total_size, 8).unwrap();
-
-        unsafe {
-            let raw_ptr = alloc(layout);
-            *(raw_ptr as *mut u64) = 1; // RC = 1
-
-            let data_ptr = raw_ptr.add(8);
-            *(data_ptr as *mut u32) = tag as u32; // 4-byte tag
-
-            // Copy payload at offset 4 from data_ptr
-            let payload_ptr = data_ptr.add(4) as *mut i32;
-            std::ptr::copy_nonoverlapping(data.as_ptr(), payload_ptr, data.len());
-
-            Self {
-                ptr: data_ptr,
-                name,
-                layout,
-            }
+impl<'a> UniversalEnum<'a> {
+    fn new(arena: &'a Arena, name: &'static str, tag: u32, payload: &[i32]) -> Self {
+        let ptr = arena.alloc_enum(tag, payload);
+        Self {
+            ptr,
+            name,
+            _marker: std::marker::PhantomData,
         }
     }
 
@@ -48,49 +32,49 @@ impl UniversalEnum {
     }
 }
 
-impl Drop for UniversalEnum {
-    fn drop(&mut self) {
-        unsafe {
-            let raw_ptr = self.ptr.sub(8);
-            let count = *(raw_ptr as *mut u64);
-
-            if count == 1 {
-                dealloc(raw_ptr, self.layout);
-                println!("\x1b[31m[GC]\x1b[0m {} freed", self.name);
-            } else {
-                *(raw_ptr as *mut u64) = count - 1;
-            }
-        }
-    }
-}
-
 fn main() {
-    println!("\x1b[1m--- Universal Enum Engine ---\x1b[0m\n");
+    println!("\x1b[1m--- Universal Enum Engine (Arena) ---\x1b[0m\n");
+
+    let arena = Arena::new(1024 * 1024);
 
     {
-        // Payment::Card(9999)
-        let p = UniversalEnum::new("Payment::Card", 0, &[9999]);
+        let house = UniversalEnum::new(&arena, "Home::House", 0, &[4, 2500]);
+        let apt = UniversalEnum::new(&arena, "Home::Apartment", 1, &[12, 404]);
+        let card = UniversalEnum::new(&arena, "Payment::Card", 0, &[9999]);
+        let color = UniversalEnum::new(&arena, "Color::Custom", 2, &[255, 128, 0]);
 
-        // Color::Custom(255, 128, 0)
-        let c = UniversalEnum::new("Color::Custom", 2, &[255, 128, 0]);
-
+        println!(
+            "\x1b[32m[AOT]\x1b[0m {} | Tag: {} | Rooms: {} | SqFt: {}",
+            house.name,
+            house.tag(),
+            house.payload(0),
+            house.payload(1)
+        );
+        println!(
+            "\x1b[32m[AOT]\x1b[0m {} | Tag: {} | Floor: {} | Unit: {}",
+            apt.name,
+            apt.tag(),
+            apt.payload(0),
+            apt.payload(1)
+        );
         println!(
             "\x1b[32m[AOT]\x1b[0m {} | Tag: {} | Value: {}",
-            p.name,
-            p.tag(),
-            p.payload(0)
+            card.name,
+            card.tag(),
+            card.payload(0)
         );
         println!(
-            "\x1b[32m[AOT]\x1b[0m {} | Tag: {} | RGB: {}, {}, {}",
-            c.name,
-            c.tag(),
-            c.payload(0),
-            c.payload(1),
-            c.payload(2)
+            "\x1b[32m[AOT]\x1b[0m {} | Tag: {} | R: {} G: {} B: {}",
+            color.name,
+            color.tag(),
+            color.payload(0),
+            color.payload(1),
+            color.payload(2)
         );
-
-        println!("\n--- Scope Closing ---");
     }
 
+    println!("\n--- Scope End (arena still valid) ---");
+    drop(arena);
+    println!("\x1b[31m[Arena]\x1b[0m All memory freed at once");
     println!("\n\x1b[34mExecution Finished.\x1b[0m");
 }

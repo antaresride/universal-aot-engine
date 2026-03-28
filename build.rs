@@ -39,10 +39,9 @@ fn main() {
         builder.switch_to_block(block);
 
         let ptr = builder.block_params(block)[0];
-        let tag = builder.ins().load(types::I8, MemFlags::new(), ptr, 0);
-        let res = builder.ins().uextend(types::I32, tag);
+        let tag = builder.ins().load(types::I32, MemFlags::new(), ptr, 0);
 
-        builder.ins().return_(&[res]);
+        builder.ins().return_(&[tag]);
         builder.seal_block(block);
         builder.finalize();
     }
@@ -69,7 +68,6 @@ fn main() {
         let ptr = params[0];
         let offset = params[1];
 
-        // ptr + 4 to skip 4-byte tag, then add offset
         let payload_base = builder.ins().iadd_imm(ptr, 4);
         let off64 = builder.ins().uextend(types::I64, offset);
         let addr = builder.ins().iadd(payload_base, off64);
@@ -81,7 +79,6 @@ fn main() {
     }
     module.define_function(func_pay, &mut ctx_pay).unwrap();
 
-    // Emit object file
     let product = module.finish();
     let obj_path = out_dir.join("univ_engine.o");
     File::create(&obj_path)
