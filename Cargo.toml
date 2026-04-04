@@ -1,5 +1,5 @@
 [package]
-name = "universal_aot_engine"
+name = "universal-aot-engine"
 version = "0.2.0"
 edition = "2024"
 
