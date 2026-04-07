@@ -17,3 +17,32 @@ See official documentation here:
 
 
 ## Technical Details
+
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Source Lang 1  │     │  Source Lang 2  │     │  Source Lang 3  │
+│  (Your DSL)     │     │  (Rust macros)  │     │  (Future: WASM) │
+│                 │     │                 │     │                 │
+│  enum Home {    │     │  enum! { Home   │     │  (imported)     │
+│    House(u32),  │     │    House(u32),   │     │                 │
+│    Apt(u32)     │     │    Apt(u32) }    │     │                 │
+│  }              │     │                 │     │                 │
+└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 ↓
+                    ┌─────────────────────┐
+                    │   UNIVERSAL CLIF    │
+                    │   (Single format)   │
+                    │                     │
+                    │  function %0(...)   │
+                    │    load.i32 ...      │
+                    │    return ...        │
+                    └──────────┬──────────┘
+                               ↓
+                    ┌─────────────────────┐
+                    │  UNIVERSAL BACKEND  │
+                    │  (x64, ARM64, etc.) │
+                    │                     │
+                    │  mov eax, [rdi]     │
+                    │  ret                │
+                    └─────────────────────┘
